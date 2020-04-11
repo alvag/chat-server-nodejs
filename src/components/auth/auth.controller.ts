@@ -6,9 +6,13 @@ import { errorResponse, successResponse } from '../../helpers/response.helper';
 import { HttpResponseCodes } from '../../enums';
 import User from '../user/user.model';
 import JWT from '../../helpers/jwt.helper';
+import _ from 'lodash';
 
 const login = async ( req: Request, res: Response ) => {
-    const result = authValidator( { ...req.body } );
+    let body = _.pick( req.body, ['email', 'password'] );
+
+    const result = authValidator( body );
+
     if ( result.error ) {
         const error = ValidationErrors.getJoiError( result.error.details[ 0 ] );
         return errorResponse( res, error );
@@ -22,13 +26,17 @@ const login = async ( req: Request, res: Response ) => {
 
         if ( !user ) {
             return errorResponse( res, { message: 'Usuario o contraseña incorrectos.' }, HttpResponseCodes.NotFound );
-        } else if ( !user.active ) {
+        } else if ( user.deletedAt ) {
             return successResponse( res, { message: 'Tu cuenta ha sido suspendida.' }, HttpResponseCodes.Unauthorized );
         }
 
         const isValidLogin = bcrypt.compareSync( result.value.password, user.password );
         if ( isValidLogin ) {
-            const userData = await JWT.createToken( user.toObject() );
+            const userData: any = await JWT.createToken( user.toObject() );
+            user.lastConnection = new Date();
+            user.active = true;
+            userData.user = _.omit( user, ['password'] );
+            await user.save();
             return successResponse( res, userData );
         } else {
             return errorResponse( res, { message: 'Usuario o contraseña incorrectos.' }, HttpResponseCodes.Unauthorized );

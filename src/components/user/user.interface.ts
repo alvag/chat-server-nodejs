@@ -9,5 +9,8 @@ export default interface UserInterface {
     password: string;
     avatar: string;
     createdAt: Date;
+    deletedAt: Date;
+    lastConnection: Date;
+    lastMessage: Date;
     active: boolean;
 }

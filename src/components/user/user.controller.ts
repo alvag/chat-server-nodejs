@@ -9,6 +9,7 @@ import { HttpResponseCodes } from '../../enums';
 import ValidationErrors from '../../helpers/validation.helper';
 import JWT from '../../helpers/jwt.helper';
 import userValidator from './user.validator';
+import Message from '../message/message.model';
 
 const create = async ( req: Request, res: Response ) => {
     let body = _.pick( req.body, ['name', 'email', 'phone', 'bio', 'facebook', 'twitter', 'password'] );
@@ -77,7 +78,7 @@ const get = async ( req: Request, res: Response ) => {
 
     if ( id ) {
         try {
-            const user = await User.findOne( { _id: id, active: true } );
+            const user = await User.findOne( { _id: id } );
             if ( user ) {
                 return successResponse( res, { user } );
             }
@@ -87,18 +88,33 @@ const get = async ( req: Request, res: Response ) => {
         }
     } else {
         const page = Number( req.query.page ) || 1;
-        const per_page = Number( req.query.per_page ) || 10;
+        const per_page = Number( req.query.per_page ) || 999;
 
         try {
-
-            let filter = {};
+            const user = await JWT.currentUser( req );
+            let filter: any = { deletedAt: { $exists: false }, _id: { $ne: user._id } };
             if ( req.query.q ) {
-                console.log( req.query.q );
+                // console.log( req.query.q );
                 let regEx = new RegExp( req.query.q, 'i' );
-                filter = { name: regEx };
+                filter = { ...filter, name: regEx };
             }
-            const users = await User.find( filter ).skip( ( page - 1 ) * per_page ).limit( per_page );
+            const users = await User.find( filter ).skip( ( page - 1 ) * per_page ).limit( per_page )
+            .map( async res => {
+                for ( const u of res ) {
+                    const messages = await Message.find( {
+                        $or: [
+                            { to: user._id, from: u._id },
+                            { to: u._id, from: user._id }
+                        ]
+                    } )
+                    .sort( { 'createdAt': -1 } )
+                    .limit( 1 );
+
+                    console.log( messages );
+                }
+            } );
             const total = await User.find( filter ).countDocuments();
+
             successResponse( res, { page, per_page, total, total_pages: Math.ceil( total / per_page ), users } );
         } catch ( e ) {
             return errorResponse( res, e, HttpResponseCodes.InternalServerError );

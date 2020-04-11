@@ -55,12 +55,25 @@ const userSchema = new mongoose.Schema( {
     },
     createdAt: {
         type: Date,
+        required: false,
         default: Date.now
+    },
+    deletedAt: {
+        type: Date,
+        required: false,
     },
     active: {
         type: Boolean,
         required: false,
-        default: true
+        default: false
+    },
+    lastConnection: {
+        type: Date,
+        required: false,
+    },
+    lastMessage: {
+        type: mongoose.Types.ObjectId,
+        ref: 'Message',
     }
 }, { versionKey: false } );
 

@@ -33,6 +33,7 @@ mongoose.connect( DB_URL, { useNewUrlParser: true, useUnifiedTopology: true } ).
 
     server.start( () => {
         console.log( `Servidor corriendo en el pueto ${server.port}` );
+
     } );
 
 } ).catch( e => {
