@@ -3,23 +3,33 @@ import User from '../user/user.model';
 import { Socket } from 'socket.io';
 import { Events } from '../../constants/constants';
 
-const updateClients = async ( socketClient: Socket, user: string, action = 'add' ) => {
+const updateClients = async ( socketClient: Socket, user: any, action = 'add' ) => {
     try {
         if ( action === 'add' ) {
             await new Client( { user, client: socketClient.id } ).save();
         } else {
-            await Client.findOneAndRemove( { user, client: socketClient.id } );
+            if (user) {
+                await Client.findOneAndRemove( { client: socketClient.id } );
+            } else {
+                const client = await Client.findOne( { client: socketClient.id } );
+                if (client) {
+                    user = client.user;
+                    client.remove();
+                }
+            }
         }
 
-        const clients = await Client.find( { user } ).countDocuments();
+        if (user) {
+            const clients = await Client.find( { user } ).countDocuments();
+            const data: any = { active: true};
+            if ( clients == 0 ) {
+                data.active = false;
+                data.lastConnection = new Date();
+            }
 
-        let active = true;
-        if ( clients == 0 ) {
-            active = false;
+            const userUpdated = await User.findByIdAndUpdate( { _id: user }, data, { new: true } );
+            socketClient.broadcast.emit( Events.USER_UPDATED, userUpdated );
         }
-
-        const userUpdated = await User.findByIdAndUpdate( { _id: user }, { active }, { new: true } );
-        socketClient.broadcast.emit( Events.USER_UPDATED, userUpdated );
 
     } catch ( e ) {
         console.log( e );

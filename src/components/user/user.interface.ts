@@ -1,3 +1,6 @@
+import { MessageInterface } from '../message/message.interface';
+import { MessageModel } from '../message/message.model';
+
 export default interface UserInterface {
     _id: any;
     name: string;
@@ -11,6 +14,6 @@ export default interface UserInterface {
     createdAt: Date;
     deletedAt: Date;
     lastConnection: Date;
-    lastMessage: Date;
+    messages: MessageModel[]
     active: boolean;
 }

@@ -3,7 +3,8 @@ import path from 'path';
 import fs from 'fs';
 import bcrypt from 'bcrypt';
 import _ from 'lodash';
-import User from './user.model';
+import  mongoose from 'mongoose';
+import User, { UserModel } from './user.model';
 import { errorResponse, successResponse } from '../../helpers/response.helper';
 import { HttpResponseCodes } from '../../enums';
 import ValidationErrors from '../../helpers/validation.helper';
@@ -95,31 +96,138 @@ const get = async ( req: Request, res: Response ) => {
             let filter: any = { deletedAt: { $exists: false }, _id: { $ne: user._id } };
             if ( req.query.q ) {
                 // console.log( req.query.q );
-                let regEx = new RegExp( req.query.q, 'i' );
+                let regEx = new RegExp( req.query.q.toString(), 'i' );
                 filter = { ...filter, name: regEx };
             }
-            const users = await User.find( filter ).skip( ( page - 1 ) * per_page ).limit( per_page )
-            .map( async res => {
-                for ( const u of res ) {
-                    const messages = await Message.find( {
-                        $or: [
-                            { to: user._id, from: u._id },
-                            { to: u._id, from: user._id }
-                        ]
-                    } )
-                    .sort( { 'createdAt': -1 } )
-                    .limit( 1 );
 
-                    console.log( messages );
-                }
-            } );
+            /*let users = await User.find( filter ).skip( ( page - 1 ) * per_page ).limit( per_page );
+            users = await getLastMessages( users, user._id );
             const total = await User.find( filter ).countDocuments();
+            successResponse( res, { page, per_page, total, total_pages: Math.ceil( total / per_page ), users } );*/
 
-            successResponse( res, { page, per_page, total, total_pages: Math.ceil( total / per_page ), users } );
+
+            let users = await User.aggregate([
+                {
+                    $match: {
+                        $and: [
+                            {deletedAt: {$exists:  false}},
+                            {_id: {$ne: mongoose.Types.ObjectId(user._id)}}
+                        ]
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "messages",
+                        let: { current_user: mongoose.Types.ObjectId(user._id), user_id: '$_id' },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $and: [
+                                            {
+                                                $or: [
+                                                    { $eq: ['$to', '$$current_user'] },
+                                                    { $eq: ['$from', '$$current_user'] }
+                                                ]
+                                            },
+                                            {
+                                                $or: [
+                                                    { $eq: ['$to', '$$user_id'] },
+                                                    { $eq: ['$from', '$$user_id'] }
+                                                ]
+                                            }
+                                        ],
+                                    }
+                                }
+                            },
+                            {
+                                $sort: { createdAt: -1 }
+                            },
+                            {
+                                $limit: 1
+                            }
+                        ],
+                        as: "messages"
+                    }
+                },
+                {
+                    $unwind: {
+                        path: "$messages",
+                        preserveNullAndEmptyArrays: true
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: 'messages.to',
+                        foreignField: '_id',
+                        as: 'messages.to'
+                    }
+                },
+                {
+                    $unwind: {
+                        path: "$messages.to",
+                        preserveNullAndEmptyArrays: true
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: 'messages.from',
+                        foreignField: '_id',
+                        as: 'messages.from'
+                    }
+                },
+
+                {
+                    $unwind: {
+                        path: "$messages.from",
+                        preserveNullAndEmptyArrays: true
+                    }
+                },
+                {
+                    $unset: ['password']
+                },
+                {
+                    $set: {
+                        avatar: {$concat: [`${process.env.SERVER}/api/v1/avatar/`, '$avatar']},
+                        'messages.to.avatar': {$concat: [`${process.env.SERVER}/api/v1/avatar/`, '$messages.to.avatar']},
+                        'messages.from.avatar': {$concat: [`${process.env.SERVER}/api/v1/avatar/`, '$messages.from.avatar']}
+                    }
+                },
+                {
+                    $project : {
+                        'messages.from.password': 0,
+                        'messages.to.password': 0,
+                    }
+                }
+            ]);
+
+            successResponse( res, { users } );
+
         } catch ( e ) {
             return errorResponse( res, e, HttpResponseCodes.InternalServerError );
         }
     }
+};
+
+const getLastMessages = ( users: UserModel[], userId: any ) => {
+    return new Promise<any[]>( async ( resolve, reject ) => {
+        try {
+            users.map(async (u, i, self) => {
+                const m = await Message.find( { $or: [{ to: userId, from: u._id }, { to: u._id, from: userId }] } )
+                .sort( { 'createdAt': -1 } )
+                .limit( 1 )
+                if ( m.length ) {
+                    self[i].messages.push(m[ 0 ]);
+                }
+            });
+
+            resolve( users );
+        } catch ( e ) {
+            reject( users );
+        }
+    } );
 };
 
 const updateAvatar = async ( req: Request, res: Response ) => {

@@ -1,9 +1,9 @@
 import mongoose from 'mongoose';
 import { MessageInterface } from './message.interface';
 
-interface MessageModel extends MessageInterface, mongoose.Document {}
+export interface MessageModel extends MessageInterface, mongoose.Document {}
 
-const messageSchema = new mongoose.Schema( {
+export const messageSchema = new mongoose.Schema( {
     from: {
         type: mongoose.Types.ObjectId,
         ref: 'User'

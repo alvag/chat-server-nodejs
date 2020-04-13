@@ -2,8 +2,9 @@ import mongoose from 'mongoose';
 import validator from 'validator';
 import uniqueValidator from 'mongoose-unique-validator';
 import UserInterface from './user.interface';
+import { messageSchema } from '../message/message.model';
 
-interface UserModel extends UserInterface, mongoose.Document {}
+export interface UserModel extends UserInterface, mongoose.Document {}
 
 const userSchema = new mongoose.Schema( {
     name: {
@@ -71,11 +72,16 @@ const userSchema = new mongoose.Schema( {
         type: Date,
         required: false,
     },
-    lastMessage: {
-        type: mongoose.Types.ObjectId,
-        ref: 'Message',
-    }
+    messages: [messageSchema],
 }, { versionKey: false } );
+
+userSchema.methods.toJSON = function() {
+    let user = this;
+    let userObject = user.toObject();
+    userObject.avatar = `${process.env.SERVER}/api/v1/avatar/${userObject.avatar}`;
+    delete userObject.password;
+    return userObject;
+}
 
 userSchema.plugin( uniqueValidator, { message: '{PATH} debe ser único.' } );
 

@@ -25,7 +25,7 @@ export default class Server {
     }
 
     async start( callback: () => void ) {
-        clientController.removeAll().catch( e => console.log( e ) );
+        clientController.removeAll().catch( () => {} );
         this.httpServer.listen( this.port, callback );
     }
 
@@ -36,7 +36,7 @@ export default class Server {
                 JWT.decodeToken( client.handshake.query.token ).then( payload => {
                     const { user } = payload;
                     clientController.updateClients( client, user._id ).catch( e => console.log( e ) );
-                } );
+                } ).catch(() => {});
             }
 
             socket.mapSockets( client, this.io );

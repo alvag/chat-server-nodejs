@@ -7,7 +7,11 @@ import { errorResponse, successResponse } from '../../helpers/response.helper';
 import JWT from '../../helpers/jwt.helper';
 import Message from './message.model';
 import { HttpResponseCodes } from '../../enums';
-import User from '../user/user.model';
+import Server from '../../server';
+import Client from '../clients/client.model';
+import { Events } from '../../constants/constants';
+
+const server = Server.instance
 
 const create = async ( req: Request, res: Response ) => {
     try {
@@ -27,6 +31,13 @@ const create = async ( req: Request, res: Response ) => {
         if ( mongoose.Types.ObjectId.isValid( body.from ) && mongoose.Types.ObjectId.isValid( body.to ) ) {
             const message = new Message( { ...body } );
             await message.save();
+            const messagePopulate = await Message.findById(message._id)
+            .populate( 'to' )
+            .populate( 'from' );
+
+            const clients = await Client.find({ $or: [{ user: body.to }, { user: user._id }] });
+            clients.forEach(c => server.io.sockets.to(c.client).emit(Events.SEND_MESSAGE, messagePopulate))
+
             return successResponse( res, { message }, HttpResponseCodes.Created );
 
         } else {
